@@ -5,3 +5,5 @@
 > 
 > *Progress is not an illusion, it happens, but it is slow and ivariably disappointing.* <br>
 > **George Orwell**, British political essayst, circa 1950.
+
+## Working Abstract
