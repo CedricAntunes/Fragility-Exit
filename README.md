@@ -19,6 +19,6 @@ This repository is (currently) organized accross X folders:
 
 ## Code Source 
 ### Data Extraction and Cleaning 
-|Folder|Step|File Name|File Description|
-|---|---|---|---|
-|World Bank data|Data extraction and cleaning|00_index.R|**(1)** Collecting data via API; <br> **(2)** selecting relevant indicators; <br> **(3)** pooling country-year data.|
+|Folder|Step|File Name|Predictor Class|File Description|
+|---|---|---|---|---|
+|World Bank data|Data extraction and cleaning|WB_economic_predictor.R|Economic|**(1)** Collecting data via API; <br> **(2)** selecting relevant indicators; <br> **(3)** pooling country-year data.|
