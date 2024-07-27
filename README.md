@@ -1,4 +1,4 @@
-# Fragility-Exit
+# Fragility Exit
 
 > *Colonies do not cease to be colonies because they are indendependent.* <br>
 > **Benjamin Disraeli**, British Prime Minister, circa 1880.
