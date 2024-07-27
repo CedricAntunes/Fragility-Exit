@@ -16,3 +16,9 @@ This repository is (currently) organized accross X folders:
    + `a - Data Processing-Extraction`: which systematizes data extraction for each class of predictors from different datasources and prepare data for merging;
    + `b - Data-Merge`: sets the key for merging datasets, and clean and prepare final data for analysis.
 * `2 - Functions`: set of auxiliary functions used in data visualization and analysis.
+
+## Code Source 
+### Data Extraction and Cleaning 
+|Folder|Step|File Name|File Description|
+|---|---|---|---|
+|World Bank data|Data extraction and cleaning|00_index.R|**(1)** Collecting data via API; <br> **(2)** selecting relevant indicators; <br> **(3)** pooling country-year data.|
