@@ -13,6 +13,6 @@
 ## Repository Organization
 This repository is (currently) organized accross X folders: 
 * `1 - Data`: this folder is, by it's turn, organized across two sub-folders:
-+ `a - Data Processing-Extraction`: which systematizes data extraction for each class of predictors from different datasources and prepare data for merging;
-+ `b - Data-Merge`: sets the key for merging datasets, and clean and prepare final data for analysis.
+   + `a - Data Processing-Extraction`: which systematizes data extraction for each class of predictors from different datasources and prepare data for merging;
+   + `b - Data-Merge`: sets the key for merging datasets, and clean and prepare final data for analysis.
 * `2 - Functions`: set of auxiliary functions used in data visualization and analysis.
