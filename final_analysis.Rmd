@@ -1,18 +1,17 @@
 ---
 title: "FRAGILITY EXIT - Quantiative Appendix"
-author: 
-- "Christoph Zuercher" 
-- "Cedric Antunes"
+author:
+- Christoph Zuercher
+- Cedric Antunes
 date: "August 2025"
-header-includes:
-    \usepackage{lscape}
-    \usepackage{pdfpages}
-    \usepackage{graphicx}
-    \usepackage[figuresright]{rotating}
 output:
+  html_notebook:
+    toc: yes
+    toc_depth: '2'
   pdf_document:
-    toc: true
+    toc: yes
     toc_depth: 2
+header-includes: \usepackage{lscape} \usepackage{pdfpages} \usepackage{graphicx} \usepackage[figuresright]{rotating}
 ---
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE, results = 'hide'}
@@ -249,6 +248,25 @@ final_clean_percentiles_data <- final_clean_percentiles_data |>
   rename(YEAR = YEAR.x,
          ISO_CODE_3 = ISO_CODE_3.x)
 
+# ------------------------------------------------------------------------------
+# WGI Loading factors ----------------------------------------------------------
+# ------------------------------------------------------------------------------
+wgi_lf_clean <- wgi_lf_clean |>
+  mutate(YEAR = as.character(YEAR))
+
+final_clean_percentiles_data <- left_join(final_clean_percentiles_data,
+                                          wgi_lf_clean,
+                                          by = c("ISO_CODE_3", 
+                                                 "YEAR"),
+                                          keep = TRUE)
+
+# Final cleaning
+final_clean_percentiles_data <- final_clean_percentiles_data |>
+  select(-YEAR.y,
+         -ISO_CODE_3.y) |>
+  rename(YEAR = YEAR.x,
+         ISO_CODE_3 = ISO_CODE_3.x)
+
 # Building working dataframe ---------------------------------------------------
 final_clean_percentiles_data_normalized_1 <- final_clean_percentiles_data |>
   select(-REVISED_COMBINED_POLITY_SCORE,
@@ -283,7 +301,9 @@ final_clean_percentiles_data_normalized_1 <- final_clean_percentiles_data |>
          -CONFLICT_DEATHS_THRESHOLD_DATE,
          -PRECISION_OF_CONFLICT_DEATHS_THRESHOLD_DATE,
          -CONFLICT_END_DATE,
-         -PRECISION_OF_CONFLICT_START_DATE
+         -PRECISION_OF_CONFLICT_START_DATE,
+         -country,
+         -regime_type
   ) |>
   estimating_WGI_30th_missing_values() |>
   estimating_WGI_35th_missing_values() |>
@@ -298,6 +318,7 @@ final_clean_percentiles_data_normalized_1 <- final_clean_percentiles_data |>
     VDEM_NON_FRAGILE_BASELINE = if_else(NEW_VDEM_LOADING_FACTOR_1_NORMALIZED.y >= NEW_VDEM_25TH_PERCENTILE, 1, 0),
 
     VDEM_FRAGILE_IDEAL        = if_else(NEW_VDEM_LOADING_FACTOR_1_NORMALIZED.y < NEW_VDEM_30TH_PERCENTILE, 1, 0),
+    WGI_FRAGILE_IDEAL         = if_else(NEW_WGI_LOADING_FACTOR_1_NORMALIZED < NEW_WGI_30TH_PERCENTILE, 1, 0),
     VDEM_NON_FRAGILE_IDEAL    = if_else(NEW_VDEM_LOADING_FACTOR_1_NORMALIZED.y >= NEW_VDEM_35TH_PERCENTILE, 1, 0),
 
     VDEM_FRAGILE_ENDLINE      = if_else(NEW_VDEM_LOADING_FACTOR_1_NORMALIZED.y < NEW_VDEM_20TH_PERCENTILE, 1, 0),
@@ -344,6 +365,7 @@ dummy_vars <- c(
   "VDEM_NON_FRAGILE_IDEAL",
   "VDEM_FRAGILE_ENDLINE", 
   "VDEM_NON_FRAGILE_ENDLINE",
+  "WGI_FRAGILE_IDEAL",
   "PARTIAL_DEMOCRACY_WITH_FACTIONALISM",
   "FH_DEMOCRACY",
   "FH_AUTOCRACY",
@@ -2993,8 +3015,134 @@ fixest::etable(
 ## 5.6. WGI Specification
 
 ```{r, wgi-specification}
+# Baseline empirical specification
+wgi_form_baseline <- as.formula(
+  paste("WGI_FRAGILE_IDEAL ~", paste(baseline_vars, 
+                                     collapse = " + "))
+)
 
+# ------------------------------------------------------------------------------
+# OLS --------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+linear_model <- feols(wgi_form_baseline, 
+                      data = standardized_data_final)
+
+clustered_se_linear <- se(linear_model, 
+                          cluster = ~ ISO_CODE_3 + YEAR)
+
+# ------------------------------------------------------------------------------
+# Logit ------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+logit_model  <- feglm(wgi_form_baseline, 
+                      family = binomial(), 
+                      data = standardized_data_final)
+
+clustered_se_logit <- se(logit_model, 
+                         cluster = ~ ISO_CODE_3 + YEAR)
+
+# ------------------------------------------------------------------------------
+# Fixed-effects (within) + Driscoll–Kraay SEs ----------------------------------
+# ------------------------------------------------------------------------------
+fe_mod <- feols(wgi_form_baseline, 
+                data = standardized_data_final,
+                # Two-way FEs
+                fixef = c("ISO_CODE_3",
+                          "YEAR"))
+
+# Two-way clustered SEs 
+se_tw <- se(fe_mod, cluster = ~ ISO_CODE_3 + YEAR)
+
+# HC1
+se_hc1 <- se(fe_mod, vcov = "HC1")
+
+# DK robustness ----------------------------------------------------------------
+plm_fe <- plm(wgi_form_baseline, 
+              data = standardized_data_final, 
+              model = "within",
+              effect = "twoways", 
+              index = c("ISO_CODE_3",
+                        "YEAR"))
+
+dk_hc1 <- vcovSCC(plm_fe, 
+                  type = "HC1", 
+                  maxlag = 3)
+
+se_dk  <- sqrt(diag(dk_hc1))
+
+# ------------------------------------------------------------------------------
+# Logit + two-way fixed effects (country & year) -------------------------------
+# ------------------------------------------------------------------------------
+
+logit_fe_model <- feglm(
+  wgi_form_baseline,
+  family = binomial(),
+  data   = standardized_data_final,
+  fixef = c("ISO_CODE_3",
+            "YEAR"))
+
+clustered_se_logit_fe <- se(logit_fe_model, cluster = ~ ISO_CODE_3 + YEAR)
+
+# ------------------------------------------------------------------------------
+# Fit statistics ---------------------------------------------------------------
+# ------------------------------------------------------------------------------
+R2_linear <- summary(linear_model)$r.squared
+
+# McFadden PR2 (pooled logit) - your original approach
+logit_null <- glm(WGI_FRAGILE_IDEAL ~ 1,
+                  family = binomial,
+                  data   = standardized_data_final)
+McFadden_R2 <- 1 - (as.numeric(logLik(logit_model)) /
+                    as.numeric(logLik(logit_null)))
+
+# McFadden-type PR2 for FE logit from fixest (recommended)
+McFadden_R2_FE <- as.numeric(fixest::fitstat(logit_fe_model, "pr2"))
+
+add_stats <- list(
+  c("R-squared (OLS)",               sprintf("%.3f", R2_linear),      "",                         ""),
+  c("Pseudo R-squared (Logit)",      "",                              sprintf("%.3f", McFadden_R2), ""),
+  c("Pseudo R-squared (Logit + FE)", "",                              "",                         sprintf("%.3f", McFadden_R2_FE)),
+  c("AIC",                           sprintf("%.2f", AIC(linear_model)), sprintf("%.2f", AIC(logit_model)), sprintf("%.2f", AIC(logit_fe_model))),
+  c("BIC",                           sprintf("%.2f", BIC(linear_model)), sprintf("%.2f", BIC(logit_model)), sprintf("%.2f", BIC(logit_fe_model)))
+)
+
+# ------------------------------------------------------------------------------
+# LaTeX baseline table ---------------------------------------------------------
+# ------------------------------------------------------------------------------
+fixest::etable(
+  list(
+    "OLS (LPM)"        = linear_model,
+    "Logit"            = logit_model,
+    "FE (cty & year)"  = fe_mod,
+    "Logit + FE"       = logit_fe_model
+  ),
+  vcov = list(
+    ~ ISO_CODE_3 + YEAR,  
+    ~ ISO_CODE_3 + YEAR,  
+    ~ ISO_CODE_3 + YEAR,  
+    ~ ISO_CODE_3 + YEAR   
+  ),
+  dict = c(
+    INSTITUTIONAL_AUTOCRACY_SCORE = "Institutional autocracy score",
+    GDP_GROWTH = "GDP Growth",
+    N_TOTAL_TROOPS = "N total troops involved",
+    LOG_GDP_PER_CAPITA = "log(GDP per capita)",
+    REGIME_DURABILITY_YEARS = "Regime durability (in years)",
+    ODA_RECEIVED_PER_CAPITA = "ODA received per capita",
+    CONFLICT_INTENSITY_YEAR = "Conflict intensity (year)",
+    GDP_DEFLATOR = "GDP deflator",
+    PARTIAL_DEMOCRACY_WITH_FACTIONALISM = "Partial democracy with factionalism"
+  ),
+  digits = 2,
+  fixef_sizes = TRUE,
+  family = TRUE,
+  tex = TRUE,
+  fontsize = "footnotesize",
+  notes = "All models use the same unbalanced WGI country-year panel (1996-2021). Columns (1) and (2) report pooled OLS and pooled logit estimates; column (3) reports a two-way FE linear model with country and year effects absorbed; column (4) reports a two-way FE logit with country and year fixed effects. Standard errors are two-way clustered by country and year. Driscoll-Kraay HAC SEs with a three-year bandwidth yield nearly identical inference and are shown in the appendix. All covariates are standardized; logit coefficients are log-odds. Significance: $^{***} p<0.01$, $^{**} p<0.05$, $^{*} p<0.1$.",
+  title = "Linear, Logistic, and Fixed-Effects Estimates of WGI Fragility Status (1996–2021)"
+)
 ```
+
+
 
 ## 5.7. Democracy Indicators 
 
@@ -5646,5 +5794,4 @@ cat(as.character(kb))
 #\input{table_all_or_none.tex}
 # \input{table_all_or_fiveyear.tex}
 # \input{table_all_or_decade.tex}
-
 ```
